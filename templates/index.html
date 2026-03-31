@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>De and Doug Inventory Management</title>
+    <link rel="stylesheet" href="/static/style.css?v=1774619578">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="nav-logo">📦</span>
+                <span class="nav-title">De & Doug Inventory</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#" onclick="showPage('home'); return false;" class="nav-link active" data-page="home">🏠 Home</a></li>
+                <li><a href="#" onclick="showPage('add'); return false;" class="nav-link" data-page="add">➕ Add Item</a></li>
+                <li><a href="#" onclick="showPage('categories'); return false;" class="nav-link" data-page="categories">📁 Categories</a></li>
+                <li><a href="#" onclick="showPage('users'); return false;" class="nav-link" data-page="users" id="usersLink" style="display: none;">👥 Users</a></li>
+                <li class="user-info">👤 <span id="currentUser">Loading...</span></li>
+                <li><a href="#" onclick="showChangePasswordModal(); return false;" class="nav-link">🔒 Change Password</a></li>
+                <li><a href="#" onclick="logout(); return false;" class="nav-link">🚪 Logout</a></li>
+            </ul>
+            <button class="nav-toggle" onclick="toggleMobileMenu()">☰</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- HOME PAGE -->
+        <div id="homePage" class="page active">
+            <header class="page-header">
+                <h1>📦 Inventory Overview</h1>
+                <p class="subtitle">Track your items, categories, serial numbers, quantity, and costs</p>
+            </header>
+
+            <!-- Search and Summary -->
+            <div class="card">
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="🔍 Search by description, serial number, or category...">
+                </div>
+                <div class="category-filter">
+                    <label for="categoryFilter">Filter by Category:</label>
+                    <select id="categoryFilter" onchange="filterByCategory()">
+                        <option value="all" selected>📋 Select a category...</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" onclick="showCategoryMenu()">📋 Show All Categories</button>
+                    <button class="btn btn-primary btn-sm" onclick="exportToExcel()">📊 Export to Excel</button>
+                </div>
+                <div class="summary">
+                    <span id="totalItems">0 items</span>
+                    <span id="totalValue">Total Value: $0.00</span>
+                </div>
+            </div>
+
+            <!-- Inventory List -->
+            <div class="card">
+                <h2>Inventory Items</h2>
+                <div id="inventoryList"></div>
+            </div>
+        </div>
+
+        <!-- ADD ITEM PAGE -->
+        <div id="addPage" class="page">
+            <header class="page-header">
+                <h1>➕ Add New Item</h1>
+                <p class="subtitle">Add items to your inventory database</p>
+            </header>
+
+            <!-- Add/Edit Item Form -->
+            <div class="card">
+                <div class="form-header">
+                    <h2 id="formTitle">Add New Item</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="showAddCategoryModal()">+ Add Category</button>
+                </div>
+                <form id="itemForm">
+                    <input type="hidden" id="itemId" value="">
+
+                    <div class="form-group">
+                        <label for="description">Item Description *</label>
+                        <input type="text" id="description" required placeholder="e.g., Laptop Computer">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="serialNumber">Serial Number *</label>
+                        <input type="text" id="serialNumber" required placeholder="e.g., SN-2024-001">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="category">Category</label>
+                        <div class="category-input-group">
+                            <select id="categorySelect" onchange="handleCategoryChange()">
+                                <option value="">-- Select or Type New Category --</option>
+                            </select>
+                            <input type="text" id="category" placeholder="Or type a new category..." oninput="handleCategoryInput()">
+                        </div>
+                        <small class="help-text">💡 Select an existing category or type a new one</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image">Image</label>
+                        <input type="file" id="image" accept="image/*,.heic,.heif" onchange="previewImage(event)">
+                        <div id="imagePreview" class="image-preview" style="display: none;">
+                            <img id="previewImg" src="" alt="Preview">
+                            <button type="button" class="btn btn-danger btn-sm" id="removeImageBtn" style="display: none;" onclick="removeImage()">Remove Image</button>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quantity">Quantity *</label>
+                            <input type="number" id="quantity" required min="0" value="1">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cost">Cost per Unit ($) *</label>
+                            <input type="number" id="cost" required min="0" step="0.01" value="0.00">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Add Item</button>
+                        <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;" onclick="resetFormAndGoHome()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- CATEGORIES PAGE -->
+        <div id="categoriesPage" class="page">
+            <header class="page-header">
+                <h1>📁 Categories</h1>
+                <p class="subtitle">Browse and manage your inventory categories</p>
+                <button class="btn btn-primary" onclick="showAddCategoryModal()">➕ Add New Category</button>
+            </header>
+
+            <div id="categoriesContainer"></div>
+        </div>
+
+        <!-- USERS PAGE (Admin Only) -->
+        <div id="usersPage" class="page">
+            <header class="page-header">
+                <h1>👥 User Management</h1>
+                <p class="subtitle">Manage users and their category permissions</p>
+                <button class="btn btn-primary" onclick="showAddUserModal()">➕ Add New User</button>
+            </header>
+
+            <div id="usersContainer"></div>
+        </div>
+    </div>
+
+    <!-- Category Menu Modal -->
+    <div id="categoryMenu" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📋 All Categories</h2>
+                <button class="btn btn-secondary btn-sm" onclick="hideCategoryMenu()">✕</button>
+            </div>
+            <div id="categoryList" class="category-list"></div>
+        </div>
+    </div>
+
+    <!-- Add Category Modal -->
+    <div id="addCategoryModal" class="modal" style="display: none;">
+        <div class="modal-content-small">
+            <div class="modal-header">
+                <h2>➕ Add New Category</h2>
+                <button class="btn btn-secondary btn-sm" onclick="hideAddCategoryModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="addCategoryForm" onsubmit="handleAddCategory(event)">
+                    <div class="form-group">
+                        <label for="newCategoryName">Category Name *</label>
+                        <input type="text" id="newCategoryName" required placeholder="e.g., Electronics, Tools, Collectibles">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Add Category</button>
+                        <button type="button" class="btn btn-secondary" onclick="hideAddCategoryModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal" style="display: none;">
+        <div class="modal-content-small">
+            <div class="modal-header">
+                <h2>🔒 Change Password</h2>
+                <button class="btn btn-secondary btn-sm" onclick="hideChangePasswordModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
+                    <div class="form-group">
+                        <label for="currentPassword">Current Password *</label>
+                        <input type="password" id="currentPassword" required placeholder="Enter your current password">
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New Password *</label>
+                        <input type="password" id="newPassword" required minlength="6" placeholder="Enter new password (min 6 characters)">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm New Password *</label>
+                        <input type="password" id="confirmPassword" required minlength="6" placeholder="Confirm new password">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Change Password</button>
+                        <button type="button" class="btn btn-secondary" onclick="hideChangePasswordModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Add New User</h2>
+                <button class="btn btn-secondary btn-sm" onclick="hideAddUserModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm" onsubmit="handleAddUser(event)">
+                    <div class="form-group">
+                        <label for="newUsername">Username *</label>
+                        <input type="text" id="newUsername" required placeholder="Enter username">
+                    </div>
+                    <div class="form-group">
+                        <label for="newUserPassword">Password *</label>
+                        <input type="password" id="newUserPassword" required minlength="6" placeholder="Enter password (min 6 characters)">
+                    </div>
+                    <div class="form-group">
+                        <label for="userPermissions">Category Permissions *</label>
+                        <div id="categoryCheckboxes">
+                            <label><input type="checkbox" value="Art"> Art</label><br>
+                            <label><input type="checkbox" value="Knifes"> Knifes</label><br>
+                            <label><input type="checkbox" value="Olight"> Olight</label><br>
+                            <label><input type="checkbox" value="Switch Games"> Switch Games</label><                        </div>
+                        <small class="help-text">Select which categories this user can access</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="addUserBtn">➕ Add User</button>
+                        <button type="button" class="btn btn-secondary" onclick="hideAddUserModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Permissions Modal -->
+    <div id="editUserModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Edit User Permissions</h2>
+                <button class="btn btn-secondary btn-sm" onclick="hideEditUserModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm" onsubmit="handleUpdateUserPermissions(event)">
+                    <input type="hidden" id="editUserId">
+                    <div class="form-group">
+                        <label for="editUsername">Username</label>
+                        <input type="text" id="editUsername" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserPermissions">Category Permissions</label>
+                        <div id="editCategoryCheckboxes">
+                            <label><input type="checkbox" value="Art"> Art</label><br>
+                            <label><input type="checkbox" value="Knifes"> Knifes</label><br>
+                            <label><input type="checkbox" value="Olight"> Olight</label><br>
+                            <label><input type="checkbox" value="Switch Games"> Switch Games</label>
+                        </div>
+                        <small class="help-text">Select which categories this user can access</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Update Permissions</button>
+                        <button type="button" class="btn btn-secondary" onclick="hideEditUserModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=1774619578"></script>
+</body>
+</html>

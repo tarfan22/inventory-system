@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  inventory-app:
+    build: .
+    container_name: inventory-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./inventory.db:/app/inventory.db
+      - ./uploads:/app/uploads
+    environment:
+      - FLASK_ENV=production
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=False
+      - SECRET_KEY=prod-secret-key-change-this-to-something-secure
+    networks:
+      - inventory-network
+
+networks:
+  inventory-network:
+    driver: bridge
