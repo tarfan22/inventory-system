@@ -796,8 +796,11 @@ def export_items():
         download_name=filename
     )
 
-if __name__ == '__main__':
+# Initialize database on startup
+with app.app_context():
     init_db()
+
+if __name__ == '__main__':
     # Production settings - debug mode disabled
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(debug=debug_mode, host='0.0.0.0', port=8000)
