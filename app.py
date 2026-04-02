@@ -519,7 +519,7 @@ def update_item(item_id):
         regenerate_barcode = data.get('regenerate_barcode', False)
 
     # Handle barcode regeneration
-    barcode_path = current_item.get('barcode')
+    barcode_path = current_item['barcode'] if current_item['barcode'] else None
     if regenerate_barcode and barcode:
         # Delete old barcode if exists
         if barcode_path and os.path.exists(os.path.join(app.config['BARCODE_FOLDER'], barcode_path)):
