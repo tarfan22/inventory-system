@@ -518,16 +518,17 @@ def update_item(item_id):
         delete_image = data.get('delete_image', False)
         regenerate_barcode = data.get('regenerate_barcode', False)
 
-    # Handle barcode regeneration
+    # Handle barcode generation
+    # Determine barcode to use: user-provided, existing, or default to serial_number
+    barcode_to_use = barcode if barcode else (current_item['barcode'] if current_item['barcode'] else serial_number)
+
+    # Generate or keep existing barcode
     barcode_path = current_item['barcode'] if current_item['barcode'] else None
-    if regenerate_barcode and barcode:
+    if regenerate_barcode or (not barcode_path):
         # Delete old barcode if exists
         if barcode_path and os.path.exists(os.path.join(app.config['BARCODE_FOLDER'], barcode_path)):
             os.remove(os.path.join(app.config['BARCODE_FOLDER'], barcode_path))
-        barcode_path = generate_barcode(barcode)
-    elif serial_number != current_item['serial_number'] and not barcode_path:
-        # Generate new barcode if serial number changed and no custom barcode
-        barcode_path = generate_barcode(serial_number)
+        barcode_path = generate_barcode(barcode_to_use)
 
     image_path = current_item['image_path']
     if delete_image:
