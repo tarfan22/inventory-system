@@ -898,3 +898,39 @@ body::before {
         gap: 20px;
     }
 }
+
+/* ===== BARCODE STYLES ===== */
+
+.input-with-button {
+    display: flex;
+    gap: 8px;
+}
+
+.input-with-button input {
+    flex: 1;
+}
+
+.item-barcode {
+    text-align: center;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.item-barcode img {
+    max-width: 100%;
+    height: auto;
+}
+
+.item-checkbox {
+    width: 20px;
+    height: 20px;
+    margin: 0 10px 0 0;
+    cursor: pointer;
+}
+
+#barcodeReader {
+    border-radius: 4px;
+    overflow: hidden;
+}

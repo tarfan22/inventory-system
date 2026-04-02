@@ -15,19 +15,25 @@ import pandas as pd
 from datetime import datetime
 import io
 from functools import wraps
+import barcode
+from barcode.writer import ImageWriter
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 DATABASE = 'inventory.db'
 UPLOAD_FOLDER = 'uploads'
+BARCODE_FOLDER = 'barcodes'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['BARCODE_FOLDER'] = BARCODE_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
 # Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Ensure barcode folder exists
+os.makedirs(BARCODE_FOLDER, exist_ok=True)
 
 def get_db() -> Connection:
     """Get database connection"""
@@ -67,6 +73,18 @@ def convert_heic_to_jpeg(heic_path, output_path):
         print(f"Error converting HEIC: {e}")
         return False
 
+def generate_barcode(code):
+    """Generate barcode image and save it"""
+    try:
+        # Using Code128 which supports alphanumeric characters
+        barcode_class = barcode.get_barcode_class('code128')
+        bc = barcode_class(code, writer=ImageWriter())
+        filename = bc.save(os.path.join(app.config['BARCODE_FOLDER'], f'barcode_{code}'))
+        return filename + '.png'
+    except Exception as e:
+        print(f"Error generating barcode: {e}")
+        return None
+
 def init_db():
     """Initialize database with inventory, users, and permissions tables"""
     conn = get_db()
@@ -93,6 +111,8 @@ def init_db():
         conn.execute('ALTER TABLE inventory ADD COLUMN category TEXT')
     if 'image_path' not in columns:
         conn.execute('ALTER TABLE inventory ADD COLUMN image_path TEXT')
+    if 'barcode' not in columns:
+        conn.execute('ALTER TABLE inventory ADD COLUMN barcode TEXT')
 
     # Create users table
     conn.execute('''
@@ -408,6 +428,7 @@ def add_item():
         category = request.form.get('category') or None
         quantity = int(request.form.get('quantity', 0))
         cost = float(request.form.get('cost', 0))
+        barcode = request.form.get('barcode') or serial_number  # Default to serial number
         image = request.files.get('image')
     else:
         data = request.json
@@ -416,7 +437,13 @@ def add_item():
         category = data.get('category')
         quantity = data['quantity']
         cost = data['cost']
+        barcode = data.get('barcode', serial_number)  # Default to serial number
         image = None
+
+    # Generate barcode image
+    barcode_path = None
+    if barcode:
+        barcode_path = generate_barcode(barcode)
 
     image_path = None
     if image and allowed_file(image.filename):
@@ -442,9 +469,9 @@ def add_item():
     conn = get_db()
     try:
         conn.execute('''
-            INSERT INTO inventory (description, serial_number, category, image_path, quantity, cost)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (description, serial_number, category, image_path, quantity, cost))
+            INSERT INTO inventory (description, serial_number, category, image_path, barcode, quantity, cost)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (description, serial_number, category, image_path, barcode_path, quantity, cost))
         conn.commit()
         conn.close()
         return jsonify({'success': True}), 201
@@ -471,8 +498,10 @@ def update_item(item_id):
         category = request.form.get('category') or None
         quantity = int(request.form.get('quantity', 0))
         cost = float(request.form.get('cost', 0))
+        barcode = request.form.get('barcode') or serial_number  # Default to serial number
         image = request.files.get('image')
         delete_image = request.form.get('delete_image') == 'true'
+        regenerate_barcode = request.form.get('regenerate_barcode') == 'true'
     else:
         data = request.json
         description = data['description']
@@ -480,8 +509,21 @@ def update_item(item_id):
         category = data.get('category')
         quantity = data['quantity']
         cost = data['cost']
+        barcode = data.get('barcode', serial_number)  # Default to serial number
         image = None
         delete_image = data.get('delete_image', False)
+        regenerate_barcode = data.get('regenerate_barcode', False)
+
+    # Handle barcode regeneration
+    barcode_path = current_item.get('barcode')
+    if regenerate_barcode and barcode:
+        # Delete old barcode if exists
+        if barcode_path and os.path.exists(os.path.join(app.config['BARCODE_FOLDER'], barcode_path)):
+            os.remove(os.path.join(app.config['BARCODE_FOLDER'], barcode_path))
+        barcode_path = generate_barcode(barcode)
+    elif serial_number != current_item['serial_number'] and not barcode_path:
+        # Generate new barcode if serial number changed and no custom barcode
+        barcode_path = generate_barcode(serial_number)
 
     image_path = current_item['image_path']
     if delete_image:
@@ -515,9 +557,9 @@ def update_item(item_id):
 
     conn.execute('''
         UPDATE inventory
-        SET description = ?, serial_number = ?, category = ?, image_path = ?, quantity = ?, cost = ?, updated_at = CURRENT_TIMESTAMP
+        SET description = ?, serial_number = ?, category = ?, image_path = ?, barcode = ?, quantity = ?, cost = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    ''', (description, serial_number, category, image_path, quantity, cost, item_id))
+    ''', (description, serial_number, category, image_path, barcode_path, quantity, cost, item_id))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
@@ -528,12 +570,19 @@ def delete_item(item_id):
     """Delete inventory item"""
     conn = get_db()
 
-    # Get item to delete associated image
-    item = conn.execute('SELECT image_path FROM inventory WHERE id = ?', (item_id,)).fetchone()
-    if item and item['image_path']:
-        image_path = os.path.join(app.config['UPLOAD_FOLDER'], item['image_path'])
-        if os.path.exists(image_path):
-            os.remove(image_path)
+    # Get item to delete associated image and barcode
+    item = conn.execute('SELECT image_path, barcode FROM inventory WHERE id = ?', (item_id,)).fetchone()
+    if item:
+        # Delete image if exists
+        if item['image_path']:
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], item['image_path'])
+            if os.path.exists(image_path):
+                os.remove(image_path)
+        # Delete barcode if exists
+        if item['barcode']:
+            barcode_path = os.path.join(app.config['BARCODE_FOLDER'], item['barcode'])
+            if os.path.exists(barcode_path):
+                os.remove(barcode_path)
 
     conn.execute('DELETE FROM inventory WHERE id = ?', (item_id,))
     conn.commit()
@@ -545,6 +594,12 @@ def delete_item(item_id):
 def uploaded_file(filename):
     """Serve uploaded files"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/barcodes/<filename>')
+@login_required
+def barcode_file(filename):
+    """Serve barcode files"""
+    return send_from_directory(app.config['BARCODE_FOLDER'], filename)
 
 @app.route('/api/items/search', methods=['GET'])
 @login_required
@@ -559,6 +614,85 @@ def search_items():
     ''', (f'%{query}%', f'%{query}%', f'%{query}%')).fetchall()
     conn.close()
     return jsonify([dict(item) for item in items])
+
+@app.route('/api/barcode-labels', methods=['POST'])
+@login_required
+def print_barcode_labels():
+    """Generate printable barcode labels for items"""
+    data = request.json
+    item_ids = data.get('item_ids', [])
+
+    if not item_ids:
+        return jsonify({'success': False, 'error': 'No items selected'}), 400
+
+    conn = get_db()
+    placeholders = ','.join(['?' for _ in item_ids])
+    items = conn.execute(f'SELECT * FROM inventory WHERE id IN ({placeholders})', item_ids).fetchall()
+    conn.close()
+
+    # Create a simple HTML page with printable labels
+    labels_html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Barcode Labels</title>
+        <style>
+            @media print {
+                body { margin: 0; }
+                .label { page-break-after: always; }
+            }
+            .label {
+                width: 2in;
+                height: 1in;
+                border: 1px solid #000;
+                padding: 10px;
+                text-align: center;
+                font-family: Arial, sans-serif;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+            }
+            .label-title {
+                font-size: 10pt;
+                font-weight: bold;
+                margin-bottom: 5px;
+                word-wrap: break-word;
+            }
+            .label-barcode {
+                width: 100%;
+                height: 40px;
+            }
+            .label-serial {
+                font-size: 8pt;
+                color: #666;
+            }
+        </style>
+    </head>
+    <body>
+    '''
+
+    for item in items:
+        item_dict = dict(item)
+        barcode_url = f"/barcodes/{item_dict['barcode']}" if item_dict.get('barcode') else ''
+        labels_html += f'''
+        <div class="label">
+            <div class="label-title">{item_dict['description']}</div>
+            {f'<img class="label-barcode" src="{barcode_url}" alt="Barcode">' if barcode_url else '<div style="height:40px;"></div>'}
+            <div class="label-serial">{item_dict['serial_number']}</div>
+        </div>
+        '''
+
+    labels_html += '''
+    </body>
+    </html>
+    '''
+
+    # Save to temporary file
+    temp_file = os.path.join(app.config['BARCODE_FOLDER'], 'labels.html')
+    with open(temp_file, 'w') as f:
+        f.write(labels_html)
+
+    return jsonify({'success': True, 'url': '/barcodes/labels.html'})
 
 @app.route('/api/export', methods=['GET'])
 @login_required

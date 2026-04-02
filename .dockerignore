@@ -12,6 +12,11 @@ ENV/
 *.db
 *.db-journal
 
+# Barcodes (generated at runtime)
+barcodes/*.png
+barcodes/*.html
+!barcodes/.gitkeep
+
 # IDEs
 .vscode/
 .idea/

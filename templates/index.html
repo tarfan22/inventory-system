@@ -46,6 +46,7 @@
                     </select>
                     <button class="btn btn-secondary btn-sm" onclick="showCategoryMenu()">📋 Show All Categories</button>
                     <button class="btn btn-primary btn-sm" onclick="exportToExcel()">📊 Export to Excel</button>
+                    <button class="btn btn-secondary btn-sm" onclick="printBarcodeLabels()">🏷️ Print Labels</button>
                 </div>
                 <div class="summary">
                     <span id="totalItems">0 items</span>
@@ -83,7 +84,19 @@
 
                     <div class="form-group">
                         <label for="serialNumber">Serial Number *</label>
-                        <input type="text" id="serialNumber" required placeholder="e.g., SN-2024-001">
+                        <div class="input-with-button">
+                            <input type="text" id="serialNumber" required placeholder="e.g., SN-2024-001">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="scanBarcode('serialNumber')">📷 Scan</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="barcode">Barcode (optional)</label>
+                        <div class="input-with-button">
+                            <input type="text" id="barcode" placeholder="Leave blank to use serial number">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="scanBarcode('barcode')">📷 Scan</button>
+                        </div>
+                        <small class="help-text">💡 If blank, barcode will be generated from serial number</small>
                     </div>
 
                     <div class="form-group">
@@ -280,6 +293,24 @@
         </div>
     </div>
 
+    <!-- Barcode Scanner Modal -->
+    <div id="barcodeScannerModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📷 Scan Barcode</h2>
+                <button class="btn btn-secondary btn-sm" onclick="hideBarcodeScanner()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="barcodeReader" style="width: 100%; height: 300px; background: #000;"></div>
+                <p class="help-text" style="text-align: center; margin-top: 15px;">Point your camera at a barcode to scan</p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="hideBarcodeScanner()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/app.js?v=1774619578"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </body>
 </html>

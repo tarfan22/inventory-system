@@ -497,6 +497,7 @@ function displayItems(items) {
         categoryItems.forEach(item => {
             html += `
                 <div class="inventory-item">
+                    <input type="checkbox" class="item-checkbox" value="${item.id}">
                     ${item.image_path ? `
                         <div class="item-thumbnail">
                             <img src="/uploads/${escapeHtml(item.image_path)}" alt="${escapeHtml(item.description)}" onclick="openImagePreview('/uploads/${escapeHtml(item.image_path)}')">
@@ -511,6 +512,12 @@ function displayItems(items) {
                             <span class="item-label">Serial Number</span>
                             <span class="item-value">${escapeHtml(item.serial_number)}</span>
                         </div>
+                        ${item.barcode ? `
+                        <div class="item-field">
+                            <span class="item-label">Barcode</span>
+                            <img src="/barcodes/${escapeHtml(item.barcode)}" alt="Barcode" style="height: 40px;">
+                        </div>
+                        ` : ''}
                         <div class="item-field">
                             <span class="item-label">Quantity</span>
                             <span class="item-value">${item.quantity}</span>
@@ -566,6 +573,7 @@ async function handleFormSubmit(e) {
             formData.append('category', getCategoryValue() || '');
             formData.append('quantity', parseInt(document.getElementById('quantity').value));
             formData.append('cost', parseFloat(document.getElementById('cost').value));
+            formData.append('barcode', document.getElementById('barcode').value.trim() || '');
 
             if (hasNewImage) {
                 formData.append('image', imageFile);
@@ -593,7 +601,8 @@ async function handleFormSubmit(e) {
                 serial_number: document.getElementById('serialNumber').value.trim(),
                 category: getCategoryValue(),
                 quantity: parseInt(document.getElementById('quantity').value),
-                cost: parseFloat(document.getElementById('cost').value)
+                cost: parseFloat(document.getElementById('cost').value),
+                barcode: document.getElementById('barcode').value.trim() || null
             };
 
             if (currentEditId) {
@@ -646,6 +655,7 @@ function editItem(id) {
     document.getElementById('itemId').value = id;
     document.getElementById('description').value = item.description;
     document.getElementById('serialNumber').value = item.serial_number;
+    document.getElementById('barcode').value = item.barcode || '';
 
     // Set category value in both dropdown and text input
     const categoryValue = item.category || '';
@@ -1255,4 +1265,105 @@ async function handleChangePassword(event) {
         submitBtn.disabled = false;
         submitBtn.textContent = originalBtnText;
     }
+}
+
+// ===== BARCODE SCANNING =====
+
+let html5QrCode = null;
+let barcodeTargetInput = null;
+
+async function scanBarcode(inputId) {
+    barcodeTargetInput = document.getElementById(inputId);
+
+    if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("barcodeReader");
+    }
+
+    document.getElementById('barcodeScannerModal').style.display = 'block';
+
+    try {
+        await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0
+            },
+            (decodedText) => {
+                // Barcode decoded
+                if (barcodeTargetInput) {
+                    barcodeTargetInput.value = decodedText;
+                }
+                stopBarcodeScanner();
+                showAlert('✅ Barcode scanned: ' + decodedText, 'success');
+            },
+            (errorMessage) => {
+                // Ignore frame-by-frame scanning errors
+            }
+        );
+    } catch (error) {
+        console.error('Error starting barcode scanner:', error);
+        showAlert('❌ Error starting camera. Please ensure camera permissions are granted.', 'error');
+        hideBarcodeScanner();
+    }
+}
+
+function stopBarcodeScanner() {
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+        }).catch(error => {
+            console.error('Error stopping scanner:', error);
+        });
+    }
+}
+
+function hideBarcodeScanner() {
+    stopBarcodeScanner();
+    document.getElementById('barcodeScannerModal').style.display = 'none';
+}
+
+// Print barcode labels for selected items
+async function printBarcodeLabels() {
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+
+    if (checkboxes.length === 0) {
+        showAlert('❌ Please select at least one item', 'error');
+        return;
+    }
+
+    const itemIds = Array.from(checkboxes).map(cb => cb.value);
+
+    try {
+        const response = await fetch('/api/barcode-labels', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_ids: itemIds })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Open the labels page in a new window for printing
+            window.open(result.url, '_blank');
+        } else {
+            showAlert('❌ ' + (result.error || 'Error generating labels'), 'error');
+        }
+    } catch (error) {
+        console.error('Label generation error:', error);
+        showAlert('❌ Error communicating with server', 'error');
+    }
+}
+
+// Show barcode in item details
+function showBarcodeImage(item) {
+    if (item.barcode) {
+        return `
+            <div class="item-barcode">
+                <img src="/barcodes/${item.barcode}" alt="Barcode" style="height: 60px;">
+                <small>${item.serial_number}</small>
+            </div>
+        `;
+    }
+    return '';
 }

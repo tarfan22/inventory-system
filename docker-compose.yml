@@ -10,6 +10,7 @@ services:
     volumes:
       - ./inventory.db:/app/inventory.db
       - ./uploads:/app/uploads
+      - ./barcodes:/app/barcodes
     environment:
       - FLASK_ENV=production
       - FLASK_APP=app.py
