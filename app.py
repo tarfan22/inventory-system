@@ -699,6 +699,43 @@ def print_barcode_labels():
 
     return jsonify({'success': True, 'url': '/barcodes/labels.html'})
 
+@app.route('/api/generate-all-barcodes', methods=['POST'])
+@login_required
+def generate_all_barcodes():
+    """Generate barcodes for all items that don't have one"""
+    conn = get_db()
+
+    # Get all items without barcodes
+    items = conn.execute('SELECT id, serial_number FROM inventory WHERE barcode IS NULL OR barcode = ""').fetchall()
+
+    generated_count = 0
+    failed_count = 0
+
+    for item in items:
+        try:
+            # Generate barcode from serial number
+            barcode_path = generate_barcode(item['serial_number'])
+            if barcode_path:
+                # Update item with barcode path
+                conn.execute('UPDATE inventory SET barcode = ? WHERE id = ?', (barcode_path, item['id']))
+                generated_count += 1
+            else:
+                failed_count += 1
+        except Exception as e:
+            print(f"Error generating barcode for item {item['id']}: {e}")
+            failed_count += 1
+
+    conn.commit()
+    conn.close()
+
+    if generated_count > 0:
+        return jsonify({
+            'success': True,
+            'message': f'Generated barcodes for {generated_count} items' + (f'. {failed_count} failed.' if failed_count > 0 else '.')
+        })
+    else:
+        return jsonify({'success': False, 'error': 'All items already have barcodes'}), 400
+
 @app.route('/api/export', methods=['GET'])
 @login_required
 def export_items():

@@ -1355,6 +1355,38 @@ async function printBarcodeLabels() {
     }
 }
 
+// Generate barcodes for all items that don't have one
+async function generateAllBarcodes() {
+    if (!confirm('This will generate barcodes for all items that currently don\'t have one.\n\nThe barcode will be based on the serial number.\n\nContinue?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/generate-all-barcodes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showAlert(`✅ ${result.message}`, 'success');
+            // Reload items to show the new barcodes
+            await loadItems();
+            // Restore current category filter
+            const currentCategory = document.getElementById('categoryFilter').value;
+            if (currentCategory !== 'all') {
+                filterByCategory();
+            }
+        } else {
+            showAlert('❌ ' + (result.error || 'Error generating barcodes'), 'error');
+        }
+    } catch (error) {
+        console.error('Bulk barcode generation error:', error);
+        showAlert('❌ Error communicating with server', 'error');
+    }
+}
+
 // Show barcode in item details
 function showBarcodeImage(item) {
     if (item.barcode) {
