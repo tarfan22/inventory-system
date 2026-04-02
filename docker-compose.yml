@@ -8,9 +8,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./inventory.db:/app/inventory.db
-      - ./uploads:/app/uploads
-      - ./barcodes:/app/barcodes
+      - ./data:/app/data
     environment:
       - FLASK_ENV=production
       - FLASK_APP=app.py

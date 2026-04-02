@@ -12,6 +12,9 @@ ENV/
 *.db
 *.db-journal
 
+# Data directory (persistent storage)
+data/
+
 # Barcodes (generated at runtime)
 barcodes/*.png
 barcodes/*.html

@@ -20,9 +20,13 @@ from barcode.writer import ImageWriter
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
-DATABASE = 'inventory.db'
-UPLOAD_FOLDER = 'uploads'
-BARCODE_FOLDER = 'barcodes'
+
+# Use data directory for persistent storage
+DATA_DIR = os.environ.get('DATA_DIR', '/app/data')
+DATABASE = os.path.join(DATA_DIR, 'inventory.db')
+UPLOAD_FOLDER = os.path.join(DATA_DIR, 'uploads')
+BARCODE_FOLDER = os.path.join(DATA_DIR, 'barcodes')
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
@@ -30,9 +34,9 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['BARCODE_FOLDER'] = BARCODE_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
-# Ensure upload folder exists
+# Ensure data directories exist
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-# Ensure barcode folder exists
 os.makedirs(BARCODE_FOLDER, exist_ok=True)
 
 def get_db() -> Connection:
