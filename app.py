@@ -85,14 +85,18 @@ def convert_heic_to_jpeg(heic_path, output_path):
         print(f"Error converting HEIC: {e}")
         return False
 
-def generate_barcode(code):
+def generate_barcode(code, filename_prefix=None):
     """Generate barcode image and save it"""
     try:
         # Using Code128 which supports alphanumeric characters
         barcode_class = barcode.get_barcode_class('code128')
         bc = barcode_class(code, writer=ImageWriter())
-        filename = bc.save(os.path.join(app.config['BARCODE_FOLDER'], f'barcode_{code}'))
-        return filename + '.png'
+        # ImageWriter automatically adds .png extension
+        if filename_prefix:
+            filename = bc.save(f'{filename_prefix}{code}')
+        else:
+            filename = bc.save(f'barcode_{code}')
+        return filename
     except Exception as e:
         print(f"Error generating barcode: {e}")
         return None
@@ -754,8 +758,9 @@ def generate_all_barcodes():
             else:
                 barcode_code = item['serial_number']
 
-            # Generate barcode
-            barcode_path = generate_barcode(barcode_code)
+            # Generate barcode with item ID in filename
+            barcode_filename = generate_barcode(barcode_code, filename_prefix=f"{item['id']}_")
+            barcode_path = os.path.join(app.config['BARCODE_FOLDER'], barcode_filename)
             import sys
             sys.stderr.write(f"DEBUG: Generated barcode for item {item['id']} ({item['category']}/{item['serial_number']}): {barcode_path}\n")
             if barcode_path:
