@@ -1437,7 +1437,20 @@ async function deleteAllBarcodes() {
 // Generate barcodes with custom category prefixes
 // Generate barcodes with custom category prefixes
 async function generateBarcodesWithPrefixes() {
-    const prefixes = prompt('Enter category prefixes (one per line, use COMMA to separate):\\n\\nExamples (enter exactly like this):\\nart,art\\nKnives,knives\\nOlight,olight\\nOL,ol\\nSwitch games,sw\\nSW,sw\\n\\n\\nFormat: category_name,prefix\\nExample: art,art', '');
+    const prefixes = prompt('=== MUST USE COMMA FORMAT ===
+
+Enter EACH line as: category,prefix
+
+COPY THESE EXAMPLES EXACTLY:
+art,art
+Knives,knives
+Olight,olight
+OL,ol
+Switch games,sw
+SW,sw
+
+
+Example: art,art (NOT: art → art)', '');
 
     if (!prefixes) {
         return;
