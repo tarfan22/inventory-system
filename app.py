@@ -717,14 +717,15 @@ def generate_all_barcodes():
     conn = get_db()
 
     # Get all items (or specific ones if requested)
-    query = 'SELECT id, serial_number, category FROM inventory WHERE barcode IS NULL OR barcode = ""'
+    query = 'SELECT id, serial_number, category, barcode FROM inventory'
     if category_prefixes:
-        # Filter by categories that have custom prefixes
+        # Filter by categories that have custom prefixes (overwrite existing barcodes)
         categories = list(category_prefixes.keys())
         placeholders = ','.join(['?' for _ in categories])
-        query = f'SELECT id, serial_number, category FROM inventory WHERE category IN ({placeholders})'
+        query = f'SELECT id, serial_number, category, barcode FROM inventory WHERE category IN ({placeholders})'
         items = conn.execute(query, categories).fetchall()
     else:
+        # Get ALL items without checking if they have barcodes
         items = conn.execute(query).fetchall()
     
     import sys
@@ -743,7 +744,7 @@ def generate_all_barcodes():
         try:
             # Determine barcode prefix based on category
             category = item['category'] or ''
-            if category_prefixes and category in category_prefixes:
+            if category_prefixes:
                 prefix = category_prefixes[category]
                 barcode_code = f"{prefix}_{item['serial_number']}"
             else:
