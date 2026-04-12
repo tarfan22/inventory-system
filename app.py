@@ -726,6 +726,15 @@ def generate_all_barcodes():
         items = conn.execute(query, categories).fetchall()
     else:
         items = conn.execute(query).fetchall()
+    
+    import sys
+    sys.stderr.write(f'DEBUG: Query: {query}\n')
+    sys.stderr.write(f'DEBUG: Found {len(items)} items to generate barcodes for\n')
+    
+    print(f'DEBUG: Query: {query}')
+    print(f'DEBUG: Found {len(items)} items to generate barcodes for')
+    for item in items:
+        print(f'DEBUG: Processing item {item["id"]} - {item["category"]}/{item["serial_number"]}')
 
     generated_count = 0
     failed_count = 0
@@ -742,11 +751,15 @@ def generate_all_barcodes():
 
             # Generate barcode
             barcode_path = generate_barcode(barcode_code)
+            import sys
+            sys.stderr.write(f"DEBUG: Generated barcode for item {item['id']} ({item['category']}/{item['serial_number']}): {barcode_path}\n")
             if barcode_path:
                 # Update item with barcode path
                 conn.execute('UPDATE inventory SET barcode = ? WHERE id = ?', (barcode_path, item['id']))
+                print(f"DEBUG: Updated item {item['id']} with barcode: {barcode_path}")
                 generated_count += 1
             else:
+                print(f"DEBUG: Failed to generate barcode for item {item['id']}")
                 failed_count += 1
         except Exception as e:
             print(f"Error generating barcode for item {item['id']}: {e}")
