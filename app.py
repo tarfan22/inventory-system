@@ -603,13 +603,11 @@ def delete_item(item_id):
     return jsonify({'success': True})
 
 @app.route('/uploads/<filename>')
-@login_required
 def uploaded_file(filename):
     """Serve uploaded files"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/barcodes/<filename>')
-@login_required
 def barcode_file(filename):
     """Serve barcode files"""
     return send_from_directory(app.config['BARCODE_FOLDER'], filename)
