@@ -719,11 +719,13 @@ def generate_all_barcodes():
     # Get all items (or specific ones if requested)
     query = 'SELECT id, serial_number, category, barcode FROM inventory'
     if category_prefixes:
-        # Filter by categories that have custom prefixes (overwrite existing barcodes)
-        categories = list(category_prefixes.keys())
-        placeholders = ','.join(['?' for _ in categories])
-        query = f'SELECT id, serial_number, category, barcode FROM inventory WHERE category IN ({placeholders})'
-        items = conn.execute(query, categories).fetchall()
+        # Normalize category names to lowercase for case-insensitive matching
+        category_prefixes_normalized = {k.lower(): v for k, v in category_prefixes.items()}
+        
+        # Get all items and filter by normalized category names
+        items = conn.execute('SELECT id, serial_number, category, barcode FROM inventory').fetchall()
+        # Filter to only items whose category (lowercase) matches one of the prefix keys
+        items = [item for item in items if item['category'].lower() in category_prefixes_normalized]
     else:
         # Get ALL items (no barcode filter - will process everything)
         items = conn.execute(query).fetchall()
@@ -742,11 +744,16 @@ def generate_all_barcodes():
 
     for item in items:
         try:
-            # Determine barcode prefix based on category
+            # Determine barcode prefix based on category (case-insensitive)
             category = item['category'] or ''
             if category_prefixes:
-                prefix = category_prefixes[category]
-                barcode_code = f"{prefix}_{item['serial_number']}"
+                # Use normalized category_prefixes for case-insensitive lookup
+                category_prefixes_normalized = {k.lower(): v for k, v in category_prefixes.items()}
+                prefix = category_prefixes_normalized.get(category.lower())
+                if prefix:
+                    barcode_code = f"{prefix}_{item['serial_number']}"
+                else:
+                    barcode_code = item['serial_number']
             else:
                 barcode_code = item['serial_number']
 
