@@ -892,30 +892,45 @@ if __name__ == '__main__':
 @login_required
 def delete_all_barcodes():
     """Delete all barcode files and clear barcode field from inventory"""
+    import sys
     conn = get_db()
 
     try:
+        # Get items with barcodes BEFORE delete
+        items_before = conn.execute('SELECT COUNT(*) FROM inventory WHERE barcode IS NOT NULL').fetchone()[0]
+        sys.stderr.write(f'DEBUG: Items with barcodes before delete: {items_before}\n')
+        
         # Get all items with barcodes
         items = conn.execute('SELECT id, barcode FROM inventory WHERE barcode IS NOT NULL AND barcode != ""').fetchall()
-
-        deleted_count = 0
+        sys.stderr.write(f'DEBUG: Found {len(items)} items to delete\n')
+        
+        file_deleted_count = 0
+        file_missing_count = 0
         for item in items:
             try:
                 barcode_path = os.path.join(app.config['BARCODE_FOLDER'], item['barcode'])
                 if os.path.exists(barcode_path):
                     os.remove(barcode_path)
-                    deleted_count += 1
+                    file_deleted_count += 1
+                else:
+                    file_missing_count += 1
+                    sys.stderr.write(f'DEBUG: File missing: {item["barcode"]}\n')
             except Exception as e:
                 print(f"Error deleting barcode for item {item['id']}: {e}")
 
         # Clear barcode field from inventory
-        conn.execute('UPDATE inventory SET barcode = NULL')
+        result = conn.execute('UPDATE inventory SET barcode = NULL')
         conn.commit()
+        
+        # Get items with barcodes AFTER delete
+        items_after = conn.execute('SELECT COUNT(*) FROM inventory WHERE barcode IS NOT NULL').fetchone()[0]
+        sys.stderr.write(f'DEBUG: Items with barcodes after delete: {items_after}\n')
+        
         conn.close()
 
         return jsonify({
             'success': True,
-            'message': f'Deleted {deleted_count} barcode files and cleared all items'
+            'message': f'Deleted {file_deleted_count} barcode files, {file_missing_count} files missing, {items_before} items cleared'
         })
     except Exception as e:
         conn.close()
