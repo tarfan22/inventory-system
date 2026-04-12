@@ -725,7 +725,7 @@ def generate_all_barcodes():
         query = f'SELECT id, serial_number, category, barcode FROM inventory WHERE category IN ({placeholders})'
         items = conn.execute(query, categories).fetchall()
     else:
-        # Get ALL items without checking if they have barcodes
+        # Get ALL items (no barcode filter - will process everything)
         items = conn.execute(query).fetchall()
     
     import sys
