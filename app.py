@@ -703,18 +703,37 @@ def print_barcode_labels():
 @login_required
 def generate_all_barcodes():
     """Generate barcodes for all items that don't have one"""
+    data = request.json
+    category_prefixes = data.get('category_prefixes', {})
+
     conn = get_db()
 
-    # Get all items without barcodes
-    items = conn.execute('SELECT id, serial_number FROM inventory WHERE barcode IS NULL OR barcode = ""').fetchall()
+    # Get all items (or specific ones if requested)
+    query = 'SELECT id, serial_number, category FROM inventory WHERE barcode IS NULL OR barcode = ""'
+    if category_prefixes:
+        # Filter by categories that have custom prefixes
+        categories = list(category_prefixes.keys())
+        placeholders = ','.join(['?' for _ in categories])
+        query = f'SELECT id, serial_number, category FROM inventory WHERE category IN ({placeholders})'
+        items = conn.execute(query, categories).fetchall()
+    else:
+        items = conn.execute(query).fetchall()
 
     generated_count = 0
     failed_count = 0
 
     for item in items:
         try:
-            # Generate barcode from serial number
-            barcode_path = generate_barcode(item['serial_number'])
+            # Determine barcode prefix based on category
+            category = item['category'] or ''
+            if category_prefixes and category in category_prefixes:
+                prefix = category_prefixes[category]
+                barcode_code = f"{prefix}_{item['serial_number']}"
+            else:
+                barcode_code = item['serial_number']
+
+            # Generate barcode
+            barcode_path = generate_barcode(barcode_code)
             if barcode_path:
                 # Update item with barcode path
                 conn.execute('UPDATE inventory SET barcode = ? WHERE id = ?', (barcode_path, item['id']))
@@ -734,9 +753,9 @@ def generate_all_barcodes():
             'message': f'Generated barcodes for {generated_count} items' + (f'. {failed_count} failed.' if failed_count > 0 else '.')
         })
     else:
-        return jsonify({'success': False, 'error': 'All items already have barcodes'}), 400
+        return jsonify({'success': False, 'error': 'All items already have barcodes or no items found'}), 400
 
-@app.route('/api/export', methods=['GET'])
+@app.route('/api/export', methods=['GET']))
 @login_required
 def export_items():
     """Export items to Excel by category (respects user permissions)"""
@@ -842,3 +861,36 @@ if __name__ == '__main__':
     # Production settings - debug mode disabled
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(debug=debug_mode, host='0.0.0.0', port=8000)
+
+@app.route('/api/delete-all-barcodes', methods=['POST'])
+@login_required
+def delete_all_barcodes():
+    """Delete all barcode files and clear barcode field from inventory"""
+    conn = get_db()
+
+    try:
+        # Get all items with barcodes
+        items = conn.execute('SELECT id, barcode FROM inventory WHERE barcode IS NOT NULL AND barcode != ""').fetchall()
+
+        deleted_count = 0
+        for item in items:
+            try:
+                barcode_path = os.path.join(app.config['BARCODE_FOLDER'], item['barcode'])
+                if os.path.exists(barcode_path):
+                    os.remove(barcode_path)
+                    deleted_count += 1
+            except Exception as e:
+                print(f"Error deleting barcode for item {item['id']}: {e}")
+
+        # Clear barcode field from inventory
+        conn.execute('UPDATE inventory SET barcode = NULL')
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': f'Deleted {deleted_count} barcode files and cleared all items'
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)}), 500
