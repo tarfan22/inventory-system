@@ -21,6 +21,14 @@ from barcode.writer import ImageWriter
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 
+@app.after_request
+def add_header(response):
+    """Add headers to prevent caching"""
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
+    return response
+
 # Use data directory for persistent storage
 DATA_DIR = os.environ.get('DATA_DIR', '/app/data')
 DATABASE = os.path.join(DATA_DIR, 'inventory.db')
