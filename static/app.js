@@ -1338,7 +1338,8 @@ async function printBarcodeLabels() {
         const response = await fetch('/api/barcode-labels', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_ids: itemIds })
+            body: JSON.stringify({ item_ids: itemIds }),
+            credentials: 'include'
         });
 
         const result = await response.json();
@@ -1409,7 +1410,8 @@ async function deleteAllBarcodes() {
     try {
         const response = await fetch('/api/delete-all-barcodes', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
         });
 
         const result = await response.json();
@@ -1465,7 +1467,8 @@ async function generateBarcodesWithPrefixes() {
         const response = await fetch('/api/generate-all-barcodes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category_prefixes: categoryPrefixes })
+            body: JSON.stringify({ category_prefixes: categoryPrefixes }),
+            credentials: 'include'
         });
 
         const result = await response.json();
