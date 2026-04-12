@@ -742,6 +742,10 @@ def generate_all_barcodes():
 
     for item in items:
         try:
+            # Skip items that already have barcodes
+            if item['barcode'] and item['barcode'].strip():
+                continue
+            
             # Determine barcode prefix based on category (case-insensitive)
             category = item['category'] or ''
             if category_prefixes:
@@ -910,8 +914,11 @@ def delete_all_barcodes():
                 print(f"Error deleting barcode for item {item['id']}: {e}")
 
         # Clear barcode field from inventory
-        conn.execute('UPDATE inventory SET barcode = NULL')
+        import sys
+        sys.stderr.write(f'DEBUG: Clearing barcode field for all items\n')
+        result = conn.execute('UPDATE inventory SET barcode = NULL')
         conn.commit()
+        sys.stderr.write(f'DEBUG: Updated {result.rowcount} items\n')
         conn.close()
 
         return jsonify({
