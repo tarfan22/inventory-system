@@ -1433,13 +1433,14 @@ async function deleteAllBarcodes() {
 }
 
 // Generate barcodes with custom category prefixes
+// Generate barcodes with custom category prefixes
 async function generateBarcodesWithPrefixes() {
-    const prefixes = prompt('Enter category prefixes (one per line):\\n\\nExamples:\\nart → art\\nKnives → knives\\nOlight → olight\\nOL → ol\\nSwitch games → sw\\nSW → sw\\n\\n\\nFormat: category_name,prefix\\n(e.g., "art,art")', '');
+    const prefixes = prompt('Enter category prefixes (one per line, use COMMA to separate):\\n\\nExamples (enter exactly like this):\\nart,art\\nKnives,knives\\nOlight,olight\\nOL,ol\\nSwitch games,sw\\nSW,sw\\n\\n\\nFormat: category_name,prefix\\nExample: art,art', '');
 
     if (!prefixes) {
         return;
     }
-    const prefixes = prompt('Enter category prefixes (one per line, use COMMA to separate):\n\nExamples (enter exactly like this):\nart,art\nKnives,knives\nOlight,olight\nOL,ol\nSwitch games,sw\nSW,sw\n\n\nFormat: category_name,prefix\nExample: art,art'", );
+
     // Parse prefixes (format: category,prefix per line)
     const categoryPrefixes = {};
     const lines = prefixes.trim().split('\\n');
@@ -1456,7 +1457,7 @@ async function generateBarcodesWithPrefixes() {
         return;
     }
 
-    if (!confirm(`Will generate barcodes for items in these categories:\\n\\n${Object.keys(categoryPrefixes).join(', ')}\\n\\nWith prefixes:\\n\\n${Object.entries(categoryPrefixes).map(([cat, pref]) => `${cat} → ${pref}`).join('\\n')}\\n\\nContinue?`)) {
+    if (!confirm('Will generate barcodes for items in these categories:\\n\\n' + Object.keys(categoryPrefixes).join(', ') + '\\n\\nWith prefixes:\\n\\n' + Object.entries(categoryPrefixes).map(([cat, pref]) => '${cat} → ${pref}').join('\\n') + '\\n\\nContinue?')) {
         return;
     }
 
@@ -1470,7 +1471,7 @@ async function generateBarcodesWithPrefixes() {
         const result = await response.json();
 
         if (result.success) {
-            showAlert(`✅ ${result.message}`, 'success');
+            showAlert('✅ ' + result.message, 'success');
             // Reload items to show new barcodes
             await loadItems();
             // Restore current category filter
