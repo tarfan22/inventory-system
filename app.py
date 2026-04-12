@@ -755,7 +755,7 @@ def generate_all_barcodes():
     else:
         return jsonify({'success': False, 'error': 'All items already have barcodes or no items found'}), 400
 
-@app.route('/api/export', methods=['GET']))
+@app.route('/api/export', methods=['GET'])
 @login_required
 def export_items():
     """Export items to Excel by category (respects user permissions)"""
