@@ -1439,7 +1439,7 @@ async function generateBarcodesWithPrefixes() {
     if (!prefixes) {
         return;
     }
-
+    const prefixes = prompt('Enter category prefixes (one per line, use COMMA to separate):\n\nExamples (enter exactly like this):\nart,art\nKnives,knives\nOlight,olight\nOL,ol\nSwitch games,sw\nSW,sw\n\n\nFormat: category_name,prefix\nExample: art,art'", );
     // Parse prefixes (format: category,prefix per line)
     const categoryPrefixes = {};
     const lines = prefixes.trim().split('\\n');
