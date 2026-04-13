@@ -3,6 +3,9 @@ Inventory Management System
 A simple web-based inventory system with SQLite database
 """
 
+import mimetypes
+mimetypes.add_type("image/webp", ".webp")
+
 from flask import Flask, render_template, request, jsonify, send_from_directory, send_file, session, redirect, url_for
 from sqlite3 import Connection
 import sqlite3
@@ -543,7 +546,7 @@ def delete_item(item_id):
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """Serve uploaded files"""
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 @app.route('/api/items/search', methods=['GET'])
 @login_required
@@ -662,3 +665,13 @@ if __name__ == '__main__':
     # Production settings - debug mode disabled
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(debug=debug_mode, host='0.0.0.0', port=8000)
+
+
+# Add webp MIME type support
+from flask import send_from_directory
+import mimetypes
+
+
+def send_file_with_mimetype(filename):
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+
