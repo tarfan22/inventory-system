@@ -15,37 +15,19 @@ import pandas as pd
 from datetime import datetime
 import io
 from functools import wraps
-import barcode
-from barcode.writer import ImageWriter
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
-
-@app.after_request
-def add_header(response):
-    """Add headers to prevent caching"""
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
-    return response
-
-# Use data directory for persistent storage
-DATA_DIR = os.environ.get('DATA_DIR', '/app/data')
-DATABASE = os.path.join(DATA_DIR, 'inventory.db')
-UPLOAD_FOLDER = os.path.join(DATA_DIR, 'uploads')
-BARCODE_FOLDER = os.path.join(DATA_DIR, 'barcodes')
-
+DATABASE = "/app/data/inventory.db"
+UPLOAD_FOLDER = "/app/data/uploads"
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['BARCODE_FOLDER'] = BARCODE_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
-# Ensure data directories exist
-os.makedirs(DATA_DIR, exist_ok=True)
+# Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(BARCODE_FOLDER, exist_ok=True)
 
 def get_db() -> Connection:
     """Get database connection"""
@@ -85,22 +67,6 @@ def convert_heic_to_jpeg(heic_path, output_path):
         print(f"Error converting HEIC: {e}")
         return False
 
-def generate_barcode(code, filename_prefix=None):
-    """Generate barcode image and save it"""
-    try:
-        # Using Code128 which supports alphanumeric characters
-        barcode_class = barcode.get_barcode_class('code128')
-        bc = barcode_class(code, writer=ImageWriter())
-        # ImageWriter automatically adds .png extension
-        if filename_prefix:
-            filename = bc.save(f'{filename_prefix}{code}')
-        else:
-            filename = bc.save(f'barcode_{code}')
-        return filename
-    except Exception as e:
-        print(f"Error generating barcode: {e}")
-        return None
-
 def init_db():
     """Initialize database with inventory, users, and permissions tables"""
     conn = get_db()
@@ -127,8 +93,6 @@ def init_db():
         conn.execute('ALTER TABLE inventory ADD COLUMN category TEXT')
     if 'image_path' not in columns:
         conn.execute('ALTER TABLE inventory ADD COLUMN image_path TEXT')
-    if 'barcode' not in columns:
-        conn.execute('ALTER TABLE inventory ADD COLUMN barcode TEXT')
 
     # Create users table
     conn.execute('''
@@ -444,7 +408,6 @@ def add_item():
         category = request.form.get('category') or None
         quantity = int(request.form.get('quantity', 0))
         cost = float(request.form.get('cost', 0))
-        barcode = request.form.get('barcode') or serial_number  # Default to serial number
         image = request.files.get('image')
     else:
         data = request.json
@@ -453,13 +416,7 @@ def add_item():
         category = data.get('category')
         quantity = data['quantity']
         cost = data['cost']
-        barcode = data.get('barcode', serial_number)  # Default to serial number
         image = None
-
-    # Generate barcode image
-    barcode_path = None
-    if barcode:
-        barcode_path = generate_barcode(barcode)
 
     image_path = None
     if image and allowed_file(image.filename):
@@ -485,9 +442,9 @@ def add_item():
     conn = get_db()
     try:
         conn.execute('''
-            INSERT INTO inventory (description, serial_number, category, image_path, barcode, quantity, cost)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (description, serial_number, category, image_path, barcode_path, quantity, cost))
+            INSERT INTO inventory (description, serial_number, category, image_path, quantity, cost)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (description, serial_number, category, image_path, quantity, cost))
         conn.commit()
         conn.close()
         return jsonify({'success': True}), 201
@@ -514,10 +471,8 @@ def update_item(item_id):
         category = request.form.get('category') or None
         quantity = int(request.form.get('quantity', 0))
         cost = float(request.form.get('cost', 0))
-        barcode = request.form.get('barcode') or serial_number  # Default to serial number
         image = request.files.get('image')
         delete_image = request.form.get('delete_image') == 'true'
-        regenerate_barcode = request.form.get('regenerate_barcode') == 'true'
     else:
         data = request.json
         description = data['description']
@@ -525,22 +480,8 @@ def update_item(item_id):
         category = data.get('category')
         quantity = data['quantity']
         cost = data['cost']
-        barcode = data.get('barcode', serial_number)  # Default to serial number
         image = None
         delete_image = data.get('delete_image', False)
-        regenerate_barcode = data.get('regenerate_barcode', False)
-
-    # Handle barcode generation
-    # Determine barcode to use: user-provided, existing, or default to serial_number
-    barcode_to_use = barcode if barcode else (current_item['barcode'] if current_item['barcode'] else serial_number)
-
-    # Generate or keep existing barcode
-    barcode_path = current_item['barcode'] if current_item['barcode'] else None
-    if regenerate_barcode or (not barcode_path):
-        # Delete old barcode if exists
-        if barcode_path and os.path.exists(os.path.join(app.config['BARCODE_FOLDER'], barcode_path)):
-            os.remove(os.path.join(app.config['BARCODE_FOLDER'], barcode_path))
-        barcode_path = generate_barcode(barcode_to_use)
 
     image_path = current_item['image_path']
     if delete_image:
@@ -574,9 +515,9 @@ def update_item(item_id):
 
     conn.execute('''
         UPDATE inventory
-        SET description = ?, serial_number = ?, category = ?, image_path = ?, barcode = ?, quantity = ?, cost = ?, updated_at = CURRENT_TIMESTAMP
+        SET description = ?, serial_number = ?, category = ?, image_path = ?, quantity = ?, cost = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    ''', (description, serial_number, category, image_path, barcode_path, quantity, cost, item_id))
+    ''', (description, serial_number, category, image_path, quantity, cost, item_id))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
@@ -587,19 +528,12 @@ def delete_item(item_id):
     """Delete inventory item"""
     conn = get_db()
 
-    # Get item to delete associated image and barcode
-    item = conn.execute('SELECT image_path, barcode FROM inventory WHERE id = ?', (item_id,)).fetchone()
-    if item:
-        # Delete image if exists
-        if item['image_path']:
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], item['image_path'])
-            if os.path.exists(image_path):
-                os.remove(image_path)
-        # Delete barcode if exists
-        if item['barcode']:
-            barcode_path = os.path.join(app.config['BARCODE_FOLDER'], item['barcode'])
-            if os.path.exists(barcode_path):
-                os.remove(barcode_path)
+    # Get item to delete associated image
+    item = conn.execute('SELECT image_path FROM inventory WHERE id = ?', (item_id,)).fetchone()
+    if item and item['image_path']:
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], item['image_path'])
+        if os.path.exists(image_path):
+            os.remove(image_path)
 
     conn.execute('DELETE FROM inventory WHERE id = ?', (item_id,))
     conn.commit()
@@ -607,15 +541,9 @@ def delete_item(item_id):
     return jsonify({'success': True})
 
 @app.route('/uploads/<filename>')
-@login_required
 def uploaded_file(filename):
     """Serve uploaded files"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-@app.route('/barcodes/<filename>')
-def barcode_file(filename):
-    """Serve barcode files"""
-    return send_from_directory(app.config['BARCODE_FOLDER'], filename)
 
 @app.route('/api/items/search', methods=['GET'])
 @login_required
@@ -630,161 +558,6 @@ def search_items():
     ''', (f'%{query}%', f'%{query}%', f'%{query}%')).fetchall()
     conn.close()
     return jsonify([dict(item) for item in items])
-
-@app.route('/api/barcode-labels', methods=['POST'])
-@login_required
-def print_barcode_labels():
-    """Generate printable barcode labels for items"""
-    data = request.json
-    item_ids = data.get('item_ids', [])
-
-    if not item_ids:
-        return jsonify({'success': False, 'error': 'No items selected'}), 400
-
-    conn = get_db()
-    placeholders = ','.join(['?' for _ in item_ids])
-    items = conn.execute(f'SELECT * FROM inventory WHERE id IN ({placeholders})', item_ids).fetchall()
-    conn.close()
-
-    # Create a simple HTML page with printable labels
-    labels_html = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Barcode Labels</title>
-        <style>
-            @media print {
-                body { margin: 0; }
-                .label { page-break-after: always; }
-            }
-            .label {
-                width: 2in;
-                height: 1in;
-                border: 1px solid #000;
-                padding: 10px;
-                text-align: center;
-                font-family: Arial, sans-serif;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-            }
-            .label-title {
-                font-size: 10pt;
-                font-weight: bold;
-                margin-bottom: 5px;
-                word-wrap: break-word;
-            }
-            .label-barcode {
-                width: 100%;
-                height: 40px;
-            }
-            .label-serial {
-                font-size: 8pt;
-                color: #666;
-            }
-        </style>
-    </head>
-    <body>
-    '''
-
-    for item in items:
-        item_dict = dict(item)
-        barcode_url = f"/barcodes/{item_dict['barcode']}" if item_dict.get('barcode') else ''
-        labels_html += f'''
-        <div class="label">
-            <div class="label-title">{item_dict['description']}</div>
-            {f'<img class="label-barcode" src="{barcode_url}" alt="Barcode">' if barcode_url else '<div style="height:40px;"></div>'}
-            <div class="label-serial">{item_dict['serial_number']}</div>
-        </div>
-        '''
-
-    labels_html += '''
-    </body>
-    </html>
-    '''
-
-    # Save to temporary file
-    temp_file = os.path.join(app.config['BARCODE_FOLDER'], 'labels.html')
-    with open(temp_file, 'w') as f:
-        f.write(labels_html)
-
-    return jsonify({'success': True, 'url': '/barcodes/labels.html'})
-
-@app.route('/api/generate-all-barcodes', methods=['POST'])
-@login_required
-def generate_all_barcodes():
-    """Generate barcodes for all items that don't have one"""
-    data = request.json
-    category_prefixes = data.get('category_prefixes', {})
-
-    conn = get_db()
-
-    # Get all items (or specific ones if requested)
-    query = 'SELECT id, serial_number, category, barcode FROM inventory'
-    if category_prefixes:
-        # Filter by categories that have custom prefixes (overwrite existing barcodes)
-        categories = list(category_prefixes.keys())
-        placeholders = ','.join(['?' for _ in categories])
-        query = f'SELECT id, serial_number, category, barcode FROM inventory WHERE category IN ({placeholders})'
-        items = conn.execute(query, categories).fetchall()
-    else:
-        # Get ALL items (no barcode filter - will process everything)
-        items = conn.execute(query).fetchall()
-    
-    import sys
-    sys.stderr.write(f'DEBUG: Query: {query}\n')
-    sys.stderr.write(f'DEBUG: Found {len(items)} items to generate barcodes for\n')
-    
-    print(f'DEBUG: Query: {query}')
-    print(f'DEBUG: Found {len(items)} items to generate barcodes for')
-    for item in items:
-        print(f'DEBUG: Processing item {item["id"]} - {item["category"]}/{item["serial_number"]}')
-
-    generated_count = 0
-    failed_count = 0
-
-    for item in items:
-        try:
-            # Determine barcode prefix based on category (case-insensitive)
-            category = item['category'] or ''
-            if category_prefixes:
-                # Case-insensitive lookup for category_prefixes
-                category_prefixes_normalized = {k.lower(): v for k, v in category_prefixes.items()}
-                prefix = category_prefixes_normalized.get(category.lower())
-                if prefix:
-                    barcode_code = f"{prefix}_{item['serial_number']}"
-                else:
-                    barcode_code = item['serial_number']
-            else:
-                barcode_code = item['serial_number']
-
-            # Generate barcode with item ID in filename
-            barcode_filename = generate_barcode(barcode_code, filename_prefix=f"{item['id']}_")
-            barcode_path = os.path.join(app.config['BARCODE_FOLDER'], barcode_filename)
-            import sys
-            sys.stderr.write(f"DEBUG: Generated barcode for item {item['id']} ({item['category']}/{item['serial_number']}): {barcode_path}\n")
-            if barcode_path:
-                # Update item with barcode path
-                conn.execute('UPDATE inventory SET barcode = ? WHERE id = ?', (barcode_path, item['id']))
-                print(f"DEBUG: Updated item {item['id']} with barcode: {barcode_path}")
-                generated_count += 1
-            else:
-                print(f"DEBUG: Failed to generate barcode for item {item['id']}")
-                failed_count += 1
-        except Exception as e:
-            print(f"Error generating barcode for item {item['id']}: {e}")
-            failed_count += 1
-
-    conn.commit()
-    conn.close()
-
-    if generated_count > 0:
-        return jsonify({
-            'success': True,
-            'message': f'Generated barcodes for {generated_count} items' + (f'. {failed_count} failed.' if failed_count > 0 else '.')
-        })
-    else:
-        return jsonify({'success': False, 'error': 'All items already have barcodes or no items found'}), 400
 
 @app.route('/api/export', methods=['GET'])
 @login_required
@@ -884,59 +657,8 @@ def export_items():
         download_name=filename
     )
 
-# Initialize database on startup
-with app.app_context():
-    init_db()
-
 if __name__ == '__main__':
+    init_db()
     # Production settings - debug mode disabled
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(debug=debug_mode, host='0.0.0.0', port=8000)
-
-@app.route('/api/delete-all-barcodes', methods=['POST'])
-@login_required
-def delete_all_barcodes():
-    """Delete all barcode files and clear barcode field from inventory"""
-    import sys
-    conn = get_db()
-
-    try:
-        # Get items with barcodes BEFORE delete
-        items_before = conn.execute('SELECT COUNT(*) FROM inventory WHERE barcode IS NOT NULL').fetchone()[0]
-        sys.stderr.write(f'DEBUG: Items with barcodes before delete: {items_before}\n')
-        
-        # Get all items with barcodes
-        items = conn.execute('SELECT id, barcode FROM inventory WHERE barcode IS NOT NULL AND barcode != ""').fetchall()
-        sys.stderr.write(f'DEBUG: Found {len(items)} items to delete\n')
-        
-        file_deleted_count = 0
-        file_missing_count = 0
-        for item in items:
-            try:
-                barcode_path = os.path.join(app.config['BARCODE_FOLDER'], item['barcode'])
-                if os.path.exists(barcode_path):
-                    os.remove(barcode_path)
-                    file_deleted_count += 1
-                else:
-                    file_missing_count += 1
-                    sys.stderr.write(f'DEBUG: File missing: {item["barcode"]}\n')
-            except Exception as e:
-                print(f"Error deleting barcode for item {item['id']}: {e}")
-
-        # Clear barcode field from inventory
-        result = conn.execute('UPDATE inventory SET barcode = NULL')
-        conn.commit()
-        
-        # Get items with barcodes AFTER delete
-        items_after = conn.execute('SELECT COUNT(*) FROM inventory WHERE barcode IS NOT NULL').fetchone()[0]
-        sys.stderr.write(f'DEBUG: Items with barcodes after delete: {items_after}\n')
-        
-        conn.close()
-
-        return jsonify({
-            'success': True,
-            'message': f'Deleted {file_deleted_count} barcode files, {file_missing_count} files missing, {items_before} items cleared'
-        })
-    except Exception as e:
-        conn.close()
-        return jsonify({'success': False, 'error': str(e)}), 500

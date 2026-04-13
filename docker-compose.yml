@@ -6,7 +6,7 @@ services:
     container_name: inventory-app
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "100.74.117.90:8000:8000"
     volumes:
       - ./data:/app/data
       - ./templates:/app/templates
@@ -15,7 +15,7 @@ services:
       - FLASK_ENV=production
       - FLASK_APP=app.py
       - FLASK_DEBUG=False
-      - SECRET_KEY=prod-secret-key-change-this-to-something-secure
+      - SECRET_KEY=dtwXoTl0YgblWP9ZugXBIUpGPfHwtlfLApf-02HRFWGXPF6U4tvXQjMS00RsOjcyk-E
     networks:
       - inventory-network
 
